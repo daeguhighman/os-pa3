@@ -55,7 +55,7 @@ The interactivity scoring is central to the SNULE scheduler, playing a crucial r
 Interactive processes typically have high sleep times as they wait for user input or I/O operations, followed by short bursts of CPU activity as they process those requests or results. 
 
 The voluntary sleep time (`p->tick_sleep`) is the cumulative sum of all the ticks that have passed while the process was in the sleeping state, whereas the run time (`p->tick_run`) represents the total number of ticks the process spends actively running on the CPU. 
-Whenever the sleep time or run time is updated, the SNULE scheduler checks if their sum exceeds `SCHED_SLP_RUN_MAX` (500 ticks or 5 seconds by default). If the sum does exceed this threshold, both values are halved. This approach gradually decays the sleep and run times over time, ensuring that the interactivity score continues to reflect the recent behavior of the process.
+Whenever the sleep time or run time is updated, the SNULE scheduler checks if their sum exceeds `SCHED_SLP_RUN_MAX` (50 ticks or 5 seconds by default). If the sum does exceed this threshold, both values are halved. This approach gradually decays the sleep and run times over time, ensuring that the interactivity score continues to reflect the recent behavior of the process.
 To minimize error during this decay process, SNULE maintains the sleep and run times in a fixed-point representation by shifting both tick counts left by `TICK_SHIFT` (default is 10) bits. This ensures greater precision when tracking sleep and run times throughout the decay process. 
 
 An interactivity score is calculated based on the relationship between a process's sleep time and run time. The interactivity score ranges from 0 to `SCHED_INTERACT_MAX` (default is 50). If the sleep time exceeds the run time, the score is computed as the ratio of sleep time to run time, scaled to the interactivity score range from 0 to `SCHED_INTERACT_MAX`, as shown below. Let $T_s$ and $T_r$ represent the sleep time and run time of the process $p$, respectively. In all other cases, the interactivity score is simply set to `SCHED_INTERACT_MAX`, which does not influence the process's priority. 
@@ -101,7 +101,7 @@ xv6 kernel is booting
 ```
 
 The log format is as follows: `[timestamp] [pid] ["starts"|"ends"] [load]`.
-* The `timestamp` is obtained using the `r_time()` function, which returns the current cycle count, where 1,000,000 cycles correspond to 1 timer tick or 10 milliseconds (see `clockintr()` @ `kernel/trap.c`). 
+* The `timestamp` is obtained using the `r_time()` function, which returns the current cycle count, where 1,000,000 cycles correspond to 1 timer tick or 100 milliseconds (see `clockintr()` @ `kernel/trap.c`). 
 * The `pid` indicates the process ID of the current process. 
 * The actions `starts` or `ends` signify whether the corresponding CPU burst starts or ends at that specific moment. 
 * The `load` represents the number of runnable processes in the system, excluding the currently running process. 
