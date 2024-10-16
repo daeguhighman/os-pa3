@@ -43,7 +43,7 @@
 #define SCHED_SLICE_MIN_DIVISOR   (6)
 
 // Interactivity score
-#define HZ                        (100)                       // 10 msec/tick
+#define HZ                        (10)                        // 100 msec/tick
 #define TICK_SHIFT                (10)      
 #define SCHED_SLP_RUN_MAX         ((5 * HZ) << TICK_SHIFT)    // 5 seconds
 
