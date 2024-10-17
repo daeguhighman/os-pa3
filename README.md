@@ -44,7 +44,7 @@ Priority range (80 - 139)
 ### Time slice
 
 SNULE bounds timeshare latency by reducing the time slice size as the system load increases. The _load_ is defined as the number of runnable processes in the current and next RQs, excluding the currently running process. When the load is high, i.e., `load` >= `SCHED_SLICE_MIN_DIVISOR` (default is 6), each process receives a minimum time slice of `SCHED_SLICE_MIN` (default is 1 tick). If the load is equal to or less than 1, processes receive a time slice of `SCHED_SLICE_DEFAULT` (default is 10 ticks). Otherwise, each process is allocated a time slice of (`SCHED_SLICE_DEFAULT` / `load`) ticks.
-In Part 3 of this project, we modify this policy slightly by allocating only one tick to interactive processes.
+In Part 3 of this project, we modify this policy slightly by allocating two ticks to interactive processes.
 
 On each timer tick, the SNULE scheduler recalculates the time slice based on the current `load` value.
 If the total number of ticks used by the current process since it was scheduled is equal to or exceeds the recalculated time slice, the process is preempted and moved to the next RQ.
@@ -76,7 +76,7 @@ p->prio = PRIO_MIN_INTERACT +
 ```
 
 The interactivity score and priority of a process are recalculated each time the process is placed into the RQ.
-As mentioned earlier, interactive processes are assigned a time slice of 1 tick. 
+As mentioned earlier, interactive processes are assigned a time slice of 2 ticks. 
 
 ## Problem Specification
 
@@ -145,7 +145,7 @@ In Part 3, you will implement the complete SNULE scheduler, incorporating all th
 * The run time (`p->tick_run`) and sleep time (`p->tick_sleep`) of each process are tracked by the system. 
 * The scheduler calculates the interactivity score to identify interactive processes.
 * Interactive processes have a priority value in the range [80, 99].
-* Time slices for interactive processes are fixed at 1 tick.
+* Time slices for interactive processes are fixed at 2 ticks.
 
 To track a process's run time and sleep time, you can use the `ticks` variable (located in `kernel/trap.c`), which is incremented by one with each timer tick. 
 
