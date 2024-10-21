@@ -27,8 +27,9 @@ def draw(file, figfile):
     with open(file) as f:
         for line in f:
             lineno += 1
-            if line and line[0].isdigit():
-                w = line.strip().split()
+            line = line.strip()
+            if line:
+                w = line.split()
 
                 if (not w[0].isnumeric()):
                     continue;
