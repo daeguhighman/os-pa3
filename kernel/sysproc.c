@@ -96,14 +96,10 @@ sys_uptime(void)
 uint64
 sys_nice(void)
 {
-  // Part 2: FILL HERE
+  int inc;
+  argint(0, &inc); // Read the inc argument
 
-
-
-
-
-
-
-  return 0;
+  // Call the nice() function and return the result
+  return nice(inc);
 }
 #endif

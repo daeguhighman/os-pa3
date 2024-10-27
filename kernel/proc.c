@@ -232,6 +232,7 @@ uchar initcode[] = {
 };
 
 // Set up first user process.
+// 부팅 후 처음으로 실행되는 프로세스
 void
 userinit(void)
 {
@@ -239,7 +240,6 @@ userinit(void)
 
   p = allocproc();
   initproc = p;
-  
   // allocate one user page and copy initcode's instructions
   // and data into it.
   uvmfirst(p->pagetable, initcode, sizeof(initcode));
@@ -251,9 +251,17 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
-
+  p -> nice = 0; // nice value 초기화
+  p -> prio = p -> nice + 120; // priority value 초기화
   p->state = RUNNABLE;
-
+  sysload++;
+  #if defined(PART2) || defined(PART3)
+  #ifdef PART3
+  calculate_interactivity_score(p); // 재스케줄 시 우선순위 갱신
+  #endif
+  add_to_rq(&current_rq, p); // RQ에 프로세스 추가
+  #endif
+  // The following line is unaffected by PART3 logic
   release(&p->lock);
 }
 
@@ -312,7 +320,8 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
-
+  np -> nice = p -> nice; // nice value 복사 
+  np -> prio = np -> nice + 120; // priority value 복사
   pid = np->pid;
 
   release(&np->lock);
@@ -323,6 +332,14 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  sysload++;
+  #if defined(PART2) || defined(PART3)
+  #ifdef PART3
+  calculate_interactivity_score(np); // 재스케줄 시 우선순위 갱신
+  #endif
+  add_to_rq(&current_rq, np); // RQ에 프로세스 추가
+  #endif
+  // The following line is unaffected by PART3 logic
   release(&np->lock);
 
   return pid;
@@ -337,8 +354,8 @@ reparent(struct proc *p)
 
   for(pp = proc; pp < &proc[NPROC]; pp++){
     if(pp->parent == p){
-      pp->parent = initproc;
-      wakeup(initproc);
+      pp->parent = initproc; // 부모 프로세스를 init로 변경
+      wakeup(initproc); // init 프로세스를 깨움
     }
   }
 }
@@ -362,7 +379,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  // 현재 작업 디렉토리 해제
   begin_op();
   iput(p->cwd);
   end_op();
@@ -447,16 +464,53 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
-  struct proc *p;
-  struct cpu *c = mycpu();
+  
+    #if defined(PART2) || defined(PART3)
+    struct proc *p;
+    struct cpu *c = mycpu(); // 현재 CPU
 
-  c->proc = 0;
-  for(;;){
+    c->proc = 0;
+    for(;;){ // 무한루프
     // The most recent process to run may have had interrupts
     // turned off; enable them to avoid a deadlock if all
     // processes are waiting.
-    intr_on();
+      intr_on();  // 인터럽트 활성화
+    if (current_rq.count == 0) {
+      // 현재 RQ가 비면 RQ를 교환
+      switch_rq();
+    }
 
+    // 우선순위가 가장 높은 프로세스 선택
+    p = select_highest_priority(&current_rq);
+    if (p != 0) {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE) {
+        p->state = RUNNING;
+        sysload--;
+        PRINTLOG_START;
+        c->proc = p;
+        remove_from_rq(&current_rq, p);
+        swtch(&c->context, &p->context);
+        c->proc = 0;
+      }
+      release(&p->lock);
+    } else {
+      // 대기열에 실행할 프로세스가 없으면 CPU 대기
+      asm volatile("wfi");
+    }
+    }
+    #endif
+    // ifdef PART1
+    #ifdef PART1
+    struct proc *p;
+    struct cpu *c = mycpu(); // 현재 CPU
+
+    c->proc = 0;
+    for(;;){ // 무한루프
+    // The most recent process to run may have had interrupts
+    // turned off; enable them to avoid a deadlock if all
+    // processes are waiting.
+    intr_on();  // 인터럽트 활성화
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
@@ -465,6 +519,8 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
+        sysload--;
+        PRINTLOG_START;
         c->proc = p;
         swtch(&c->context, &p->context);
 
@@ -480,8 +536,11 @@ scheduler(void)
       intr_on();
       asm volatile("wfi");
     }
+    }
+    #endif
   }
-}
+
+
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
@@ -496,29 +555,96 @@ sched(void)
   int intena;
   struct proc *p = myproc();
 
-  if(!holding(&p->lock))
+  if(!holding(&p->lock)) // p->lock must be held
     panic("sched p->lock");
-  if(mycpu()->noff != 1)
+  if(mycpu()->noff != 1) // proc->noff must be 1
     panic("sched locks");
-  if(p->state == RUNNING)
+  if(p->state == RUNNING)  // p->state must not be running
     panic("sched running");
-  if(intr_get())
+  if(intr_get()) // interrupts must be off
     panic("sched interruptible");
 
-  intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
-  mycpu()->intena = intena;
+  intena = mycpu()->intena; // 인터럽트 상태가 프로세스가 아닌 CPU에 종속되기 때문에 저장해둠
+  PRINTLOG_END;
+  swtch(&p->context, &mycpu()->context); // Context switch (return to scheduler)
+  mycpu()->intena = intena; // 인터럽트 상태를 복구
 }
 
 // Give up the CPU for one scheduling round.
 void
 yield(void)
 {
+  #ifdef PART3
+  struct proc *temp;
+
+  for(temp = proc; temp < &proc[NPROC]; temp++) {
+    if(temp != myproc()){
+      acquire(&temp->lock);
+      if(temp->state == SLEEPING) {
+        temp->tick_sleep++;  // Sleep time increments
+        apply_tick_decay(temp);  // Apply decay logic for sleep time
+      }
+      release(&temp->lock);
+    }
+  }
+  #endif
+  #ifdef PART1
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  sysload++;
   sched();
   release(&p->lock);
+  #endif
+  // #ifdef PART2
+  #if defined(PART2) || defined(PART3)
+    struct proc *p = myproc();
+    // acquire(&p->lock);
+    int load = sysload;
+    int time_slice;
+    
+    if (load >= SCHED_SLICE_MIN_DIVISOR) {
+      time_slice = SCHED_SLICE_MIN;  // 최소 time slice
+    } else if (load <= 1) {
+      time_slice = SCHED_SLICE_DEFAULT;  // 기본 time slice
+    } else {
+      time_slice = SCHED_SLICE_DEFAULT / load;  // load에 따른 time slice
+    }
+    #ifdef PART3
+    if (p -> prio < 100) {
+      time_slice = 2;
+    }
+    #endif
+  // 프로세스가 SLEEPING 상태인 경우
+  if (p->state == SLEEPING) {
+    p->tick_sleep++;  // sleep 중인 시간 증가
+    #ifdef PART3
+    apply_tick_decay(p); 
+    #endif 
+  } else if (p->state == RUNNING) {
+    p->tick_run++;  // 실행 중인 시간 증가
+    #ifdef PART3
+    apply_tick_decay(p);
+    #endif
+    p->tick_run_current++;  // 실행 중인 시간 증가
+    // time slice가 소진된 경우에만 yield 실행
+    if (p->tick_run_current >= time_slice) {
+      p->tick_run_current = 0;  // 실행 중인 시간 초기화
+      acquire(&p->lock);
+      p->state = RUNNABLE;
+      #ifdef PART3
+      calculate_interactivity_score(p); // 재스케줄 시 우선순위 갱신
+      #endif
+      // The following line is unaffected by PART3 logic
+      add_to_rq(&next_rq, p);
+      sysload++;  // 시스템 로드 증가
+      sched();  // 스케줄러 호출하여 CPU 양보
+      release(&p->lock);
+
+    }
+  }
+  #endif
+  
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -588,7 +714,15 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        sysload++;      
+        #if defined(PART2) || defined(PART3)
+        #ifdef PART3
+        calculate_interactivity_score(p); // 재스케줄 시 우선순위 갱신
+        #endif
+        add_to_rq(&current_rq, p); // RQ에 프로세스 추가
+        #endif
       }
+      // The following line is unaffected by PART3 logic
       release(&p->lock);
     }
   }
@@ -609,6 +743,7 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        sysload++;
       }
       release(&p->lock);
       return 0;
@@ -695,4 +830,23 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// Internal nice() function for kernel use
+int nice(int inc) {
+  struct proc *p = myproc(); // Get the current process
+
+  // Update the nice value
+  p->nice += inc;
+
+  // Clamp the nice value to the valid range (-20 to 19)
+  if(p->nice < -20)
+    p->nice = -20;
+  else if(p->nice > 19)
+    p->nice = 19;
+
+  // Update the priority value
+  p->prio = p->nice + 120;
+  // Return the updated nice value
+  return p->nice;
 }

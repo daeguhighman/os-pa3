@@ -49,5 +49,24 @@
 
 #define SCHED_INTERACT_MAX        (50)
 #define SCHED_INTERACT_THRESH     (30)
-
 extern int sysload;
+#if defined(PART2) || defined(PART3)
+// Run Queue
+struct rq {
+  struct proc *procs[NPROC];
+  int count; // number of processes in the run queue
+};
+
+extern struct rq current_rq;
+extern struct rq next_rq;
+
+
+void add_to_rq(struct rq *queue, struct proc *p);
+struct proc* select_highest_priority(struct rq *queue);
+void switch_rq();
+void remove_from_rq(struct rq *queue, struct proc *p);
+#ifdef PART3
+void calculate_interactivity_score(struct proc *p);
+void apply_tick_decay(struct proc *p);
+#endif
+#endif

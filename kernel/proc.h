@@ -101,6 +101,9 @@ struct proc {
   int prio;                    // Priority value [80, 139]
   int tick_run;                // Run time in ticks
   int tick_sleep;              // Sleep time in ticks
+#if defined(PART2) || defined(PART3)
+  int time_slice;              // Time slice
+  int tick_run_current;        // Current run time in ticks
 #endif
 
   // these are private to the process, so p->lock need not be held.
@@ -113,3 +116,7 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+int nice(int inc);
+#endif
+

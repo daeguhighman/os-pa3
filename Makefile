@@ -1,6 +1,6 @@
 # SNU ----------------------------------------------------
 # Please specify your student ID:
-STUDENTID =
+STUDENTID = 202010555
 
 # Do not change the following PANUM
 PANUM = pa3
@@ -79,7 +79,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 # -DPART1: Enables code specific to Part 1
 # -DPART2: Enables code specific to Part 2
 # -DPART3: Enables code specific to Part 3
-CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSNU -DLOG
+CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSNU -DLOG -DPART3
 CFLAGS += -MD
 CFLAGS += -mcmodel=medany
 # CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
